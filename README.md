@@ -54,7 +54,7 @@ The service is configured via `config.json` and environment variables.
 
 ### `config.json`
 
-```json
+```json5
 {
   "port": 3000,
   "cors": {
