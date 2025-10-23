@@ -112,7 +112,7 @@ Sends an email with the provided details.
 
 **Request Body (JSON):**
 
-```json
+```json5
 {
   "subject": "Your email subject",  // Required: The subject of the email
   "text": "Your email body text",    // Required: The plain text body of the email
@@ -136,11 +136,11 @@ curl -X POST -H "Content-Type: application/json" \
 **Responses:**
 
 *   **`200 OK`**: Email sent successfully.
-    ```json
+    ```json5
     { "message": "Request sent successfully" }
     ```
 *   **`400 Bad Request`**: Missing required fields, invalid email address, or client override not allowed.
-    ```json
+    ```json5
     { "message": "Subject and text are required" }
     // or
     { "message": "Invalid 'to' email address: invalid-email" }
@@ -148,11 +148,11 @@ curl -X POST -H "Content-Type: application/json" \
     { "message": "Overriding 'from' address is not allowed" }
     ```
 *   **`429 Too Many Requests`**: Rate limit exceeded.
-    ```json
+    ```json5
     { "message": "Too many requests from this IP, please try again after a minute" }
     ```
 *   **`500 Internal Server Error`**: An error occurred during email sending (e.g., SMTP server issue).
-    ```json
+    ```json5
     { "message": "Nodemailer failed to send" }
     ```
 
