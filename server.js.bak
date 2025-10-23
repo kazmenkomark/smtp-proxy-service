@@ -1,0 +1,109 @@
+const express = require("express");
+const nodemailer = require("nodemailer");
+const cors = require("cors");
+const fs = require("fs");
+const rateLimit = require("express-rate-limit");
+
+const app = express();
+
+const config = JSON.parse(fs.readFileSync("config.json", "utf-8"));
+const PORT = config.port;
+
+// Helper function for email validation
+function isValidEmail(email) {
+  const emailRegex = /^[^S@]+@[^S@]+\\\.[^S@]+$/;
+  return emailRegex.test(email);
+}
+
+if (config.cors && config.cors.allowedOrigins && config.cors.allowedOrigins.length > 0) {
+  app.use(cors({
+    origin: function (origin, callback) {
+      if (!origin || config.cors.allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  }));
+} else {
+  app.use(cors()); // Allow all origins if none are specified in config
+}
+app.use(express.json());
+
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: config.rateLimit.maxRequestsPerMinute, // Max requests per minute from config
+  message: "Too many requests from this IP, please try again after a minute",
+});
+
+if (!process.env.SMTP_PASS) {
+  console.error("Error: SMTP_PASS environment variable is not set.");
+  process.exit(1); // Exit the application
+}
+
+// Настроить транспорт для nodemailer (Mail.ru)
+const transporter = nodemailer.createTransport({
+  host: config.smtp.host,
+  port: config.smtp.port,
+  secure: config.smtp.secure,
+  auth: {
+    user: config.smtp.auth.user,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+app.post("/send", limiter, async (req, res) => {
+  const { subject, text, from, to } = req.body;
+
+  if (!subject || !text) {
+    return res.status(400).json({ message: "Subject and text are required" });
+  }
+
+  let finalFrom = config.mailer.from;
+  let finalTo = config.mailer.to;
+
+  if (config.mailer.allowClientOverrides) {
+    if (from) {
+      finalFrom = from;
+    }
+    if (to) {
+      finalTo = to;
+    }
+  } else {
+    // If overrides are not allowed, and client tries to override, return error
+    if (from) {
+      return res.status(400).json({ message: "Overriding 'from' address is not allowed" });
+    }
+    if (to) {
+      return res.status(400).json({ message: "Overriding 'to' address is not allowed" });
+    }
+  }
+
+  // Validate email addresses
+  if (!isValidEmail(finalFrom)) {
+    return res.status(400).json({ message: `Invalid 'from' email address: ${finalFrom}` });
+  }
+  if (!isValidEmail(finalTo)) {
+    return res.status(400).json({ message: `Invalid 'to' email address: ${finalTo}` });
+  }
+
+  const mailOptions = {
+    from: finalFrom,
+    to: finalTo,
+    subject: subject,
+    text: text,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    return res.status(200).json({ message: "Request sent successfully" });
+  } catch (error) {
+    console.error(error);
+    const errorMessage = error.message || "Error sending email";
+    return res.status(500).json({ message: errorMessage });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server started on port ${PORT}`);
+});
